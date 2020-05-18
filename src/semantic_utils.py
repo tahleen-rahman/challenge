@@ -1,16 +1,27 @@
 # Created by rahman at 13:36 2020-05-17 using PyCharm
+import itertools
+
+import pandas as pd
+
+import nltk
+from nltk import word_tokenize
+from nltk.corpus import wordnet
 import pandas as pd
 
 import nltk
 from nltk import word_tokenize
 from nltk.corpus import wordnet
 from nltk.stem import WordNetLemmatizer
+from nltk.stem import WordNetLemmatizer
 from nltk.stem.porter import PorterStemmer
 
 from collections import Counter
 
-from utils import format_results, colored_results
+from utils import format_results, colored_results, keyword_search
 
+from colorama import Fore, Back
+from colorama import init
+init(autoreset=True)
 
 
 def get_wordnet_pos(word):
@@ -58,19 +69,6 @@ def prep_text(df, model, datapath='./data/', stemming=0):
     df['text'] = df.text.apply(lambda text: [word for word in text if word.isalpha()])
 
 
-    """df['title_tok'] = df.titles.apply(word_tokenize)
-    df['title_tok'] = df.title_tok.apply(lambda text: [word for word in text if word.isalpha()])
-
-    df['abstract_tok'] = df['abstract'].apply(word_tokenize)
-    df['abstract_tok'] = df.abstract_tok.apply(lambda text: [word for word in text if word.isalpha()])
-
-    df['desc_tok'] = df['descriptions'].apply(word_tokenize)
-    df['desc_tok'] = df.desc_tok.apply(lambda text: [word for word in text if word.isalpha()])
-
-    df['claim_tok'] = df['claims'].apply(word_tokenize)
-    df['claim_tok'] = df.claim_tok.apply(lambda text: [word for word in text if word.isalpha()])"""
-
-
     # filter out stop words from all languages
     print("Removing stopwords...")
 
@@ -84,15 +82,6 @@ def prep_text(df, model, datapath='./data/', stemming=0):
     df['text'] = df.text.apply(lambda text: [w for w in text if not w in stop_words])
 
 
-
-    """
-    df['title_tok'] = df.title_tok.apply(lambda text: [w for w in text if not w in stop_words])
-    df['abstract_tok'] = df.abstract_tok.apply(lambda text: [w for w in text if not w in stop_words])
-    df['desc_tok'] = df.desc_tok.apply(lambda text: [w for w in text if not w in stop_words])
-    df['claim_tok'] = df.claim_tok.apply(lambda text: [w for w in text if not w in stop_words])"""
-
-
-
     # converts the word to its meaningful base form, infer the POS automatically
     print("Lemmatizing...")
 
@@ -100,22 +89,11 @@ def prep_text(df, model, datapath='./data/', stemming=0):
     df['text'] = df.text.apply(lambda text: [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in text])
 
 
-    """
-    df['title_tok'] = df.title_tok.apply(lambda text: [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in text])
-    df['abstract_tok'] = df.abstract_tok.apply(lambda text: [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in text])
-    df['desc_tok'] = df.desc_tok.apply(lambda text: [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in text])
-    df['claim_tok'] = df.claim_tok.apply(lambda text: [lemmatizer.lemmatize(word, get_wordnet_pos(word)) for word in text])"""
 
     # stemming of words
     if stemming:
         porter = PorterStemmer()
         df['text'] = df.text.apply(lambda text: [porter.stem(word) for word in text])
-
-        """
-        df['title_tok'] = df.title_tok.apply(lambda text: [porter.stem(word) for word in text])
-        df['abstract_tok'] = df.abstract_tok.apply(lambda text:[porter.stem(word) for word in text])
-        df['desc_tok'] = df.desc_tok.apply(lambda text:[porter.stem(word) for word in text])
-        df['claim_tok'] = df.claim_tok.apply(lambda text: [porter.stem(word) for word in text])"""
 
 
 
@@ -139,7 +117,7 @@ def prep_text(df, model, datapath='./data/', stemming=0):
 
 
 
-def root_word_search_rank(synonym, simi, df):
+def root_word_search_rank(syns, synonym, simi, df, topn):
     """
 
     :param synonym:
@@ -147,8 +125,7 @@ def root_word_search_rank(synonym, simi, df):
     :return:
     """
 
-    res = df
-    res = res[res.text.apply(lambda text: synonym in text)]
+    res = df[df.text.apply(lambda text: synonym in text)]
     res_ = res.copy()
 
     #rank results
@@ -157,17 +134,17 @@ def root_word_search_rank(synonym, simi, df):
         res_['score'] = res.freq_dict.apply(lambda x: x[synonym] * simi)
         res = res_.sort_values(by='score', ascending=False)
 
-        format_results(res, synonym, ranked=1)
-        colored_results(res, synonym,  flag_phrase=1, ranked=1)
-
-        return 1
+        format_results(res, synonym, ranked=1, topn=topn)
+        colored_results(res, synonym,  flag_phrase=1, ranked=1, topn=topn)
+        syns.append(synonym)
 
     else:
         print ("Nothing for", synonym)
-        return 0
+
+    return res, syns
 
 
-def sem_search(wordlist, df, model):
+def sem_search(wordlist, df,df1, model, topn, topsims=3):
     """
 
     :return:
@@ -182,22 +159,45 @@ def sem_search(wordlist, df, model):
     # only words that exist in the word2vec model
     wordlist = [word for word in wordlist if word in model.vocab]
 
+    result_df = pd.DataFrame()
+
+    syns_arr=[]
 
     for word in wordlist:
 
-        # Search for the same word root
-        root_word_search_rank(synonym=word, simi=1.0, df=df)
+        syns = []
 
-        syn_dict = dict(model.most_similar(word))
+        # Search for the same word root
+        res, syns = root_word_search_rank(syns, synonym=word, simi=1.0, df=df, topn=topn)
+        result_df = pd.concat([result_df, res], ignore_index=True)
+
+        syn_dict = dict(model.most_similar(word, topn=topsims))
 
         for synonym, simi in syn_dict.items():
+
             #print("Searching for", synonym, "similarity", simi)
-            root_word_search_rank(synonym, simi, df)
+            res, syns = root_word_search_rank(syns, synonym, simi, df, topn)
+            result_df = pd.concat([result_df, res], ignore_index=True)
+
+        syns_arr.append(syns)
+
+
+    print (syns_arr)
+    new_wordlist = list(itertools.product(syns_arr[0], syns_arr[1]))
+    print ("")
+    print (Back.GREEN + "Searching for "+ str(new_wordlist))
+
+
+    for wordset in new_wordlist:
+
+        keyword_search(wordset, df1, 10)
 
 
 
-def semantic_search(input, df, model):
+
+
+def semantic_search(input, df,df1, model, topn=5, topsims=3):
 
     # split by whitespace(s) into list
     wordlist = input.split()
-    sem_search(wordlist, df, model)
+    sem_search(wordlist, df,df1, model, topn, topsims)

@@ -1,12 +1,14 @@
 # Created by rahman at 01:15 2020-05-16 using PyCharm
+
+import re
+import pandas as pd
 from datetime import datetime
 import xml.etree.ElementTree as et
 import zipfile, fnmatch, os
 from colorama import Fore, Back
 from colorama import init
 init(autoreset=True)
-import re
-import pandas as pd
+
 
 
 def unzip_data(datapath='./data/'):
@@ -129,12 +131,12 @@ def parse_xmls(datapath='./data/'):
 
 
 
-def format_results(res, words, ranked = 0):
+def format_results(res, words, ranked, topn=5):
     """
     tune and display
     :return:
     """
-    pd.options.display.max_rows=5
+    pd.options.display.max_rows=topn
     #pd.options.display.max_cols=10
     pd.options.display.max_colwidth=30
     pd.options.display.expand_frame_repr=0
@@ -143,9 +145,9 @@ def format_results(res, words, ranked = 0):
     print ("")
     print ("")
 
-    print (Back.GREEN + str(len(res))+ " patents  containing", Fore.RED + words, Back.GREEN + "found")
+    print (Back.GREEN + str(len(res))+ " patents  containing", Fore.RED + str(words), Back.GREEN + "found")
 
-    cols = ['score', 'fname', 'ipc_num', 'pub_num', 'lang', 'pub_date',
+    cols = ['score', 'fname', 'ipc_num', 'pub_num', 'pub_date',
             'applicants', 'inventors', 'titles', 'abstract',
             'descriptions', 'claims']
 
@@ -166,7 +168,7 @@ def colored_results(res, wordlist, flag_phrase, ranked=0, topn=5):
     :return:
     """
 
-
+    #print (wordlist)
     if flag_phrase:
         phrase = wordlist
         my_regex = r"(" + re.escape(phrase.lower()) + r")"
@@ -176,9 +178,12 @@ def colored_results(res, wordlist, flag_phrase, ranked=0, topn=5):
             my_regex = my_regex + re.escape(word.lower()) + "|"
         my_regex += r")\b"
 
-    #my_regex = r'\b(?:{})\b'.format('|'.join(map(re.escape, wordlist)))
+    #print (my_regex)
 
-    cols = ['score', 'fname', 'ipc_num', 'pub_num', 'lang', 'pub_date',
+    #my_regex = r'\b(?:{})\b'.format('|'.join(map(re.escape, wordlist)))
+    #print (my_regex)
+
+    cols = ['score', 'fname', 'ipc_num', 'pub_num', 'pub_date',
             'applicants', 'inventors', 'titles', 'abstract']
         #,'descriptions', 'claims']
 
@@ -198,7 +203,7 @@ def colored_results(res, wordlist, flag_phrase, ranked=0, topn=5):
 
         for i in range(len(row)):
             try:
-                print(res.columns[i].upper() + ": "+ re.sub(my_regex, Fore.RED + r'\1' + Fore.RESET, str(row[i]), flags=re.IGNORECASE))
+                print(res.columns[i].upper() + ": "+ re.sub(my_regex, Fore.RED + r'\1' + Fore.RESET, str(row[i].lower()), flags=re.IGNORECASE))
             except:
                 print (" ")
 
@@ -227,7 +232,7 @@ def parse_dates(wordlist):
 
 
 
-def keyword_search(wordlist, df):
+def keyword_search(wordlist, df, topn):
     """
 
     :param wordlist: list contaiing keywords
@@ -241,40 +246,68 @@ def keyword_search(wordlist, df):
     # initialize result df
     res = df
 
-    # find exact ordered match first
+    # find exact ordered match first among key fields
     phrase = ' '.join(wordlist)
-    res = res[res.apply(lambda row: row.astype(str).str.contains(phrase, case=False).any(), axis=1)]
+    res = res[res[['fname', 'ipc_num', 'pub_num', 'lang','pub_date',
+            'applicants', 'inventors', 'titles']].apply(lambda row: row.astype(str).str.contains(phrase, case=False).any(), axis=1)]
 
     # display
     if len(res) > 0:
-        format_results(res, phrase)
-        colored_results(res, phrase, flag_phrase=1)
+        format_results(res, phrase, ranked=0, topn=topn)
+        colored_results(res, phrase, flag_phrase=1, ranked=0, topn=topn)
 
 
     else:
 
-        print("No patents found containing phrase", phrase)
-        print("Searching as separate keywords...")
+        print("No patents found containing phrase", phrase , " in key fields, Searching as separate keywords...")
 
         res = df
-
-        #iteratively search for records containing all keywords unordered
+        #iteratively search for records containing all keywords unordered in key fields
         for word in wordlist:
             word_regex = r'(\b' + re.escape(word.lower()) + r'\b)'
-            res = res[res.apply(lambda row: row.astype(str).str.contains(word_regex, case=False).any(), axis=1)]
+            res = res[res[['fname', 'ipc_num', 'pub_num', 'lang','pub_date',
+            'applicants', 'inventors', 'titles']].apply(lambda row: row.astype(str).str.contains(word_regex, case=False).any(), axis=1)]
 
         # display
         if len(res) > 0:
-            format_results(res, wordlist)
-            colored_results(res, wordlist, flag_phrase=0)
+            format_results(res, wordlist, ranked=0, topn=topn)
+            colored_results(res, wordlist, flag_phrase=0, ranked=0, topn=topn)
+
 
         else:
-            print("No patents found containing all words", wordlist)
+
+            print("No patents found containing all words", wordlist, "in key fields. Searching as phrase in text ...")
+
+            res = df
+            res = res[res[['abstract', 'descriptions', 'claims']].apply(lambda row: row.astype(str).str.contains(phrase, case=False).any(), axis=1)]
+
+            # display
+            if len(res) > 0:
+                format_results(res, phrase, ranked=0, topn=topn)
+                colored_results(res, phrase, flag_phrase=1, ranked=0, topn=topn)
+
+            else:
+
+                print("No patents found containing phrase", phrase, "in text. Searching as separate keywords in text ...")
+
+                res = df
+                # iteratively search for records containing all keywords unordered in text
+                for word in wordlist:
+                    word_regex = r'(\b' + re.escape(word.lower()) + r'\b)'
+                    res = res[res.apply(lambda row: row.astype(str).str.contains(word_regex, case=False).any(), axis=1)]
+
+                # display
+                if len(res) > 0:
+                    format_results(res, wordlist, ranked=0, topn=topn)
+                    colored_results(res, wordlist, flag_phrase=0, ranked=0, topn=topn)
+
+                else:
+
+                    print("No patents found containing all words", wordlist, "in text. Try removing a keyword or try again with another term.")
 
 
-
-def kw_search(input, df):
+def kw_search(input, df, topn=5):
 
     # split by whitespace(s) into list
     words = input.split()
-    keyword_search(words, df)
+    keyword_search(words, df, topn)

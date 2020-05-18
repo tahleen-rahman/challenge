@@ -8,9 +8,7 @@
 """
 
 
-import sys
 import gensim
-import pandas as pd
 from semantic_utils import *
 from utils import *
 
@@ -19,22 +17,21 @@ from utils import *
 
 model = gensim.models.KeyedVectors.load_word2vec_format('./model/GoogleNews-vectors-negative300.bin.gz', binary=True)
 
-df = pd.read_csv('./data' + "/df.csv", index_col=0, dtype=object)
-prep_text(df, model)
+df1 = pd.read_csv('./data' + "/df.csv", index_col=0, dtype=object)
+prep_text(df1, model)
 
 
 
 ### part 1
-kw_search('Dow chemical company', df)
-kw_search('cigarettes', df)
+kw_search('Dow chemical company', df1, 5)
+kw_search('cigarettes', df1, 6)
 
 
 ### part 2
-df = pd.read_feather('{}{}.ftr'.format('./data/', 'df_tok_freq'))
+df2 = pd.read_feather('{}{}.ftr'.format('./data/', 'df_tok_freq'))
 
-semantic_search('petroleum', df, model)
-semantic_search('tobacco', df, model)
-semantic_search('cleaning', df, model)
-semantic_search('cats', df, model)
-semantic_search('happy life', df, model)
+semantic_search('graphite', df2,df1, model, 3, 3)
+semantic_search('petroleum', df2, df1, model, topn=3, topsims=5)
+semantic_search('tobacco', df2,df1,  model, 2)
+semantic_search('cleaning', df2,df1,  model, 8)
 
