@@ -18,7 +18,7 @@ from utils import *
 model = gensim.models.KeyedVectors.load_word2vec_format('./model/GoogleNews-vectors-negative300.bin.gz', binary=True)
 
 df1 = pd.read_csv('./data' + "/df.csv", index_col=0, dtype=object)
-prep_text(df1, model)
+#prep_text(df1, model)
 
 
 
