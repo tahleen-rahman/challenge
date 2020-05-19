@@ -6,7 +6,7 @@ Usage from terminal
 2. python -m nltk.downloader all
 3. Paste the compressed patent dataset inside data dir
 4. Download word embeddings from https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit inside the model dir
-5. python preprocess.py
+5. python3 preprocess.py
 6. python3 keyword_search.py keywords
 7. python3 semantic_search word
 
