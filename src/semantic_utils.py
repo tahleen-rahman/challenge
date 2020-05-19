@@ -183,16 +183,19 @@ def sem_search(wordlist, df,df1, model, topn, topsims=3):
 
 
     print (syns_arr)
-    new_wordlist = list(itertools.product(syns_arr[0], syns_arr[1]))
-    print ("")
-    print (Back.GREEN + "Searching for "+ str(new_wordlist))
+
+    try:
+        new_wordlist = list(itertools.product(syns_arr[0], syns_arr[1]))
+        print ("")
+        print (Back.GREEN + "Searching for "+ str(new_wordlist))
 
 
-    for wordset in new_wordlist:
+        for wordset in new_wordlist:
 
-        keyword_search(wordset, df1, 10)
+            keyword_search(wordset, df1, 10)
 
-
+    except:
+        print ("No matches found. ")
 
 
 
