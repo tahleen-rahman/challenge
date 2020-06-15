@@ -1,4 +1,4 @@
-
+Semantic and keyword search in a dataset of patent documents using googleNews word2vec embeddings 
 Usage from terminal
 
 0. Install python >= 3.7
